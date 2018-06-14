@@ -28,6 +28,8 @@ class APICache
       if store.exists?(hash)
         if !store.expired?(hash, @cache)
           :current
+        elsif !store.expired?(fetching_flag, 300)
+          :fetching_in_progress
         elsif (@valid == :forever) || !store.expired?(hash, @valid)
           :refetch
         else
@@ -52,10 +54,22 @@ class APICache
       return nil
     end
 
+    def start_fetching_api
+      store.set(fetching_flag, '1')
+    end
+
+    def end_fetching_api
+      store.delete(fetching_flag)
+    end
+
     private
 
     def hash
       Digest::MD5.hexdigest @key
+    end
+
+    def fetching_flag
+      "#{hash}_fetching_flag"
     end
 
     def store

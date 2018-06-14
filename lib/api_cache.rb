@@ -100,11 +100,12 @@ class APICache
 
     cache_state = cache.state
 
-    if cache_state == :current
+    if cache_state == :current || cache_state == :fetching_in_progress
       APICache.logger.debug "APICache #{@key}: Returning from cache"
       cache.get
     else
       begin
+        cache.start_fetching_api
         value = api.get
         cache.set(value)
         value
@@ -125,6 +126,8 @@ class APICache
             raise e
           end
         end
+      ensure
+        cache.end_fetching_api
       end
     end
   end

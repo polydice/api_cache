@@ -44,6 +44,8 @@ describe APICache do
       before :each do
         @api = mock(APICache::API, :get => @api_data)
         @cache = mock(APICache::Cache, :get => @cache_data, :set => true)
+        allow(@cache).to receive(:start_fetching_api)
+        allow(@cache).to receive(:end_fetching_api)
 
         APICache::API.stub!(:new).and_return(@api)
         APICache::Cache.stub!(:new).and_return(@cache)
