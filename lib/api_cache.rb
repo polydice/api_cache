@@ -85,8 +85,14 @@ class APICache
       :valid => 86400,  # 1 day       Maximum time to use old data
       #             :forever is a valid option
       :period => 60,    # 1 minute    Maximum frequency to call API
-      :timeout => 5     # 5 seconds   API response timeout
+      :timeout => 5,    # 5 seconds   API response timeout
+      :prewarm => false # pre-warm cache
     }.merge(options)
+
+    if options[:prewarm]
+      options[:period] = -3600
+      options[:timeout] = 3600
+    end
 
     cache = APICache::Cache.new(key, {
       :cache => options[:cache],
@@ -100,36 +106,37 @@ class APICache
 
     cache_state = cache.state
 
-    if cache_state == :current || cache_state == :fetching_in_progress
+    if !options[:prewarm] && (cache_state == :current || cache_state == :fetching_in_progress)
       APICache.logger.debug "APICache #{@key}: Returning from cache"
-      cache.get
-    else
-      begin
-        cache.start_fetching_api
-        value = api.get
-        cache.set(value)
-        value
-      rescue => e
-        APICache.logger.info "APICache #{key}: Exception raised (#{e.message} - #{e.class})" \
-
-        # No point outputting backgraces for internal APICache errors
-        APICache.logger.debug "Backtrace:\n#{e.backtrace.join("\n")}" unless e.kind_of?(APICacheError)
-
-        if cache_state == :refetch
-          cache.get
-        else
-          APICache.logger.warn "APICache #{key}: Data not available in the cache or from API"
-          if options.has_key?(:fail)
-            fail = options[:fail]
-            fail.respond_to?(:call) ? fail.call : fail
-          else
-            raise e
-          end
-        end
-      ensure
-        cache.end_fetching_api
-      end
+      return cache.get
     end
+
+    begin
+      cache.start_fetching_api
+      value = api.get
+      cache.set(value)
+    rescue => e
+      APICache.logger.info "APICache #{key}: Exception raised (#{e.message} - #{e.class})" \
+
+      # No point outputting backgraces for internal APICache errors
+      APICache.logger.debug "Backtrace:\n#{e.backtrace.join("\n")}" unless e.kind_of?(APICacheError)
+
+      if cache_state == :refetch
+        cache.get
+      else
+        APICache.logger.warn "APICache #{key}: Data not available in the cache or from API"
+        if options.has_key?(:fail)
+          fail = options[:fail]
+          fail.respond_to?(:call) ? fail.call : fail
+        else
+          raise e
+        end
+      end
+    ensure
+      cache.end_fetching_api
+    end
+
+    value
   end
 
   # Manually delete data from the cache.
